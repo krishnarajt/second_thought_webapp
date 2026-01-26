@@ -1,12 +1,12 @@
 // ==========================================
 // CHANGE THIS TO YOUR BACKEND URL
 // ==========================================
-const BASE_URL = 'https://your-backend-url.com/api';
+const BASE_URL = 'https://second-thought.krishnarajthadesar.in/api';
 
 // ==========================================
 // DEV BYPASS - Set to false for production
 // ==========================================
-export const DEV_BYPASS_LOGIN = true;
+export const DEV_BYPASS_LOGIN = false;
 // ==========================================
 
 // Types
