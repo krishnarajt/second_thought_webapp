@@ -1,7 +1,7 @@
 // ==========================================
 // CHANGE THIS TO YOUR BACKEND URL
 // ==========================================
-const BASE_URL = 'http://localhost:8000/api';
+const BASE_URL = 'https://second-thought.krishnarajthadesar.in/api';
 
 // ==========================================
 // DEV BYPASS - Set to false for production
