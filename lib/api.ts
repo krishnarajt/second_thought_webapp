@@ -138,7 +138,7 @@ export async function saveSchedule(schedule: DailySchedule): Promise<ApiResponse
   localStorage.setItem(`schedule_${schedule.date}`, JSON.stringify(schedule));
   
   // Also trigger download
-  downloadScheduleJson(schedule);
+  // downloadScheduleJson(schedule);
   
   if (DEV_BYPASS_LOGIN) {
     return { success: true, message: 'Saved locally (dev mode)' };
