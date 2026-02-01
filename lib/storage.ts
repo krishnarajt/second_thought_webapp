@@ -11,6 +11,7 @@ export const defaultSettings: UserSettings = {
   nudgeDuringActivity: true,
   congratulateOnFinish: true,
   defaultSlotDuration: 60,
+  telegramLinked: false,
 };
 
 export function saveTokens(accessToken: string, refreshToken: string) {

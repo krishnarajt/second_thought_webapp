@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { UserSettings, durationOptions, updateSettings } from '@/lib/api';
+import { UserSettings, durationOptions, updateSettings, getSettings, getTelegramLinkCode, unlinkTelegram } from '@/lib/api';
 
 interface SettingsPageProps {
   settings: UserSettings;
@@ -18,6 +18,12 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
   const [slotDuration, setSlotDuration] = useState(settings.defaultSlotDuration);
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Telegram state
+  const [telegramLinked, setTelegramLinked] = useState(settings.telegramLinked || false);
+  const [telegramLinkCode, setTelegramLinkCode] = useState<string | null>(null);
+  const [telegramMessage, setTelegramMessage] = useState<string | null>(null);
+  const [isTelegramLoading, setIsTelegramLoading] = useState(false);
 
   useEffect(() => {
     setName(settings.name);
@@ -26,7 +32,26 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
     setNudgeDuring(settings.nudgeDuringActivity);
     setCongratulate(settings.congratulateOnFinish);
     setSlotDuration(settings.defaultSlotDuration);
+    setTelegramLinked(settings.telegramLinked || false);
   }, [settings]);
+  
+  // Load settings from backend when component mounts
+  useEffect(() => {
+    loadBackendSettings();
+  }, []);
+  
+  const loadBackendSettings = async () => {
+    try {
+      const backendSettings = await getSettings();
+      setTelegramLinked(backendSettings.telegramLinked || false);
+      // Update parent settings if needed
+      if (backendSettings.telegramLinked !== settings.telegramLinked) {
+        onSettingsUpdate({ ...settings, telegramLinked: backendSettings.telegramLinked });
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+    }
+  };
 
   const handleSave = async () => {
     setIsLoading(true);
@@ -39,12 +64,50 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
       nudgeDuringActivity: nudgeDuring,
       congratulateOnFinish: congratulate,
       defaultSlotDuration: slotDuration,
+      telegramLinked,
     };
     
     await updateSettings(newSettings);
     onSettingsUpdate(newSettings);
     setSaveSuccess(true);
     setIsLoading(false);
+  };
+  
+  const handleGetTelegramCode = async () => {
+    setIsTelegramLoading(true);
+    setTelegramMessage(null);
+    setTelegramLinkCode(null);
+    
+    try {
+      const response = await getTelegramLinkCode();
+      setTelegramLinkCode(response.code);
+      setTelegramMessage(response.message);
+    } catch (error) {
+      setTelegramMessage('Error: Failed to get link code');
+    } finally {
+      setIsTelegramLoading(false);
+    }
+  };
+  
+  const handleUnlinkTelegram = async () => {
+    setIsTelegramLoading(true);
+    setTelegramMessage(null);
+    
+    try {
+      await unlinkTelegram();
+      setTelegramLinked(false);
+      setTelegramMessage('Telegram account unlinked successfully');
+      onSettingsUpdate({ ...settings, telegramLinked: false });
+    } catch (error) {
+      setTelegramMessage('Error: Failed to unlink Telegram');
+    } finally {
+      setIsTelegramLoading(false);
+    }
+  };
+  
+  const handleClearTelegramMessage = () => {
+    setTelegramMessage(null);
+    setTelegramLinkCode(null);
   };
 
   return (
@@ -124,6 +187,76 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
             disabled={isLoading}
           />
         </div>
+      </div>
+
+      {/* Telegram Integration Section */}
+      <div className="mb-8">
+        <h2 className="text-sm font-medium text-indigo-500 mb-4">Telegram Integration</h2>
+        
+        {telegramLinked ? (
+          /* Telegram is linked */
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+            <div className="mb-3">
+              <p className="font-medium text-indigo-900 mb-1">✓ Telegram Connected</p>
+              <p className="text-sm text-indigo-700">You'll receive notifications on Telegram</p>
+            </div>
+            <button
+              onClick={handleUnlinkTelegram}
+              disabled={isTelegramLoading}
+              className="w-full py-2 border border-red-500 text-red-500 rounded-lg font-medium hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
+            >
+              {isTelegramLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+              ) : (
+                'Unlink Telegram'
+              )}
+            </button>
+          </div>
+        ) : (
+          /* Telegram not linked */
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="mb-3">
+              <p className="font-medium text-gray-900 mb-1">Link Telegram Account</p>
+              <p className="text-sm text-gray-600">Get your schedule reminders on Telegram</p>
+            </div>
+            
+            {telegramLinkCode ? (
+              /* Show the code */
+              <div className="mb-3">
+                <div className="bg-white border border-gray-300 rounded-lg p-3 mb-2">
+                  <p className="text-xs text-gray-600 text-center mb-1">Your Link Code:</p>
+                  <p className="text-2xl font-bold text-indigo-500 text-center tracking-wider">{telegramLinkCode}</p>
+                  <p className="text-xs text-gray-600 text-center mt-2">{telegramMessage}</p>
+                </div>
+                <button
+                  onClick={handleClearTelegramMessage}
+                  className="w-full py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleGetTelegramCode}
+                disabled={isTelegramLoading}
+                className="w-full py-2 bg-indigo-500 text-white rounded-lg font-medium hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center"
+              >
+                {isTelegramLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  'Get Link Code'
+                )}
+              </button>
+            )}
+          </div>
+        )}
+        
+        {/* Telegram error/success message */}
+        {telegramMessage && !telegramLinkCode && (
+          <p className={`text-sm mt-2 ${telegramMessage.startsWith('Error') ? 'text-red-500' : 'text-indigo-500'}`}>
+            {telegramMessage}
+          </p>
+        )}
       </div>
 
       {/* Success Message */}

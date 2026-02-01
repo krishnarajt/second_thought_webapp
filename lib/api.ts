@@ -1,7 +1,7 @@
 // ==========================================
 // CHANGE THIS TO YOUR BACKEND URL
 // ==========================================
-const BASE_URL = 'https://second-thought.krishnarajthadesar.in/api';
+const BASE_URL = 'http://localhost:8000/api';
 
 // ==========================================
 // DEV BYPASS - Set to false for production
@@ -23,6 +23,13 @@ export interface UserSettings {
   nudgeDuringActivity: boolean;
   congratulateOnFinish: boolean;
   defaultSlotDuration: number;
+  telegramLinked?: boolean;
+}
+
+export interface TelegramLinkResponse {
+  code: string;
+  expiresAt: string;
+  message: string;
 }
 
 export interface TaskBlock {
@@ -176,4 +183,74 @@ export function generateId(): string {
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+}
+
+// Get user settings including Telegram status
+export async function getSettings(): Promise<UserSettings> {
+  if (DEV_BYPASS_LOGIN) {
+    return {
+      name: 'Dev User',
+      remindBeforeActivity: true,
+      remindOnStart: true,
+      nudgeDuringActivity: true,
+      congratulateOnFinish: true,
+      defaultSlotDuration: 60,
+      telegramLinked: false,
+    };
+  }
+  
+  try {
+    const res = await fetch(`${BASE_URL}/user/settings`, {
+      method: 'GET',
+      headers: getAuthHeader(),
+    });
+    
+    if (!res.ok) throw new Error('Failed to get settings');
+    return res.json();
+  } catch {
+    // Return default settings if offline
+    return {
+      name: '',
+      remindBeforeActivity: true,
+      remindOnStart: true,
+      nudgeDuringActivity: true,
+      congratulateOnFinish: true,
+      defaultSlotDuration: 60,
+      telegramLinked: false,
+    };
+  }
+}
+
+// Get Telegram link code
+export async function getTelegramLinkCode(): Promise<TelegramLinkResponse> {
+  if (DEV_BYPASS_LOGIN) {
+    return {
+      code: 'DEV123',
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      message: 'Dev mode - use code DEV123',
+    };
+  }
+  
+  const res = await fetch(`${BASE_URL}/user/telegram/link`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  
+  if (!res.ok) throw new Error('Failed to get link code');
+  return res.json();
+}
+
+// Unlink Telegram account
+export async function unlinkTelegram(): Promise<ApiResponse> {
+  if (DEV_BYPASS_LOGIN) {
+    return { success: true, message: 'Telegram unlinked (dev mode)' };
+  }
+  
+  const res = await fetch(`${BASE_URL}/user/telegram/unlink`, {
+    method: 'POST',
+    headers: getAuthHeader(),
+  });
+  
+  if (!res.ok) throw new Error('Failed to unlink Telegram');
+  return res.json();
 }
