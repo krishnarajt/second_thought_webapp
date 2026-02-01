@@ -2,6 +2,10 @@
 
 A simple timetable/schedule web application built with Next.js and Tailwind CSS.
 
+![alt text](public/msedge_29BKDCqpzP.png)
+![alt text](public/msedge_qku6KYXHZc.png)
+![alt text](public/msedge_UjKM4JaCpE.png)
+
 ## Deployment to Vercel
 
 1. Push this folder to a GitHub repository
