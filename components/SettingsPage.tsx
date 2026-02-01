@@ -74,6 +74,12 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
   };
   
   const handleGetTelegramCode = async () => {
+    // Don't allow getting code if already linked
+    if (telegramLinked) {
+      setTelegramMessage('Telegram is already linked to your account');
+      return;
+    }
+    
     setIsTelegramLoading(true);
     setTelegramMessage(null);
     setTelegramLinkCode(null);
@@ -98,6 +104,9 @@ export default function SettingsPage({ settings, onSettingsUpdate, onLogout }: S
       setTelegramLinked(false);
       setTelegramMessage('Telegram account unlinked successfully');
       onSettingsUpdate({ ...settings, telegramLinked: false });
+      
+      // Reload settings from backend to ensure sync
+      await loadBackendSettings();
     } catch (error) {
       setTelegramMessage('Error: Failed to unlink Telegram');
     } finally {
