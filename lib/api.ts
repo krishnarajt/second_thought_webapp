@@ -76,6 +76,54 @@ const getAuthHeader = (): HeadersInit => {
   return token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
 };
 
+// Token refresh helper
+async function refreshAccessToken(): Promise<boolean> {
+  if (DEV_BYPASS_LOGIN) return true;
+  
+  const refreshToken = localStorage.getItem('refreshToken');
+  if (!refreshToken) return false;
+  
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    
+    if (!res.ok) return false;
+    
+    const data: AuthResponse = await res.json();
+    localStorage.setItem('accessToken', data.accessToken);
+    if (data.refreshToken) {
+      localStorage.setItem('refreshToken', data.refreshToken);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Helper for authenticated requests with auto-retry on 401
+async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  let res = await fetch(url, {
+    ...options,
+    headers: { ...getAuthHeader(), ...options.headers },
+  });
+  
+  // If 401, try to refresh token and retry once
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      res = await fetch(url, {
+        ...options,
+        headers: { ...getAuthHeader(), ...options.headers },
+      });
+    }
+  }
+  
+  return res;
+}
+
 // API Functions
 export async function login(username: string, password: string): Promise<AuthResponse> {
   if (DEV_BYPASS_LOGIN) {
@@ -113,9 +161,8 @@ export async function updateSettings(settings: UserSettings): Promise<ApiRespons
   }
   
   try {
-    const res = await fetch(`${BASE_URL}/user/settings`, {
+    const res = await authenticatedFetch(`${BASE_URL}/user/settings`, {
       method: 'PUT',
-      headers: getAuthHeader(),
       body: JSON.stringify({
         name: settings.name,
         remindBeforeActivity: settings.remindBeforeActivity,
@@ -137,17 +184,13 @@ export async function saveSchedule(schedule: DailySchedule): Promise<ApiResponse
   // Save to localStorage
   localStorage.setItem(`schedule_${schedule.date}`, JSON.stringify(schedule));
   
-  // Also trigger download
-  // downloadScheduleJson(schedule);
-  
   if (DEV_BYPASS_LOGIN) {
     return { success: true, message: 'Saved locally (dev mode)' };
   }
   
   try {
-    const res = await fetch(`${BASE_URL}/schedule/save`, {
+    const res = await authenticatedFetch(`${BASE_URL}/schedule/save`, {
       method: 'POST',
-      headers: getAuthHeader(),
       body: JSON.stringify({ schedule }),
     });
     
@@ -155,6 +198,33 @@ export async function saveSchedule(schedule: DailySchedule): Promise<ApiResponse
     return { success: true, message: 'Synced to server' };
   } catch {
     return { success: true, message: 'Saved locally (offline)' };
+  }
+}
+
+// Load schedule from backend with token refresh support
+export async function getScheduleFromBackend(date: string): Promise<DailySchedule | null> {
+  if (DEV_BYPASS_LOGIN) {
+    return loadScheduleFromStorage(date);
+  }
+  
+  try {
+    const res = await authenticatedFetch(`${BASE_URL}/schedule/${date}`, {
+      method: 'GET',
+    });
+    
+    if (!res.ok) throw new Error('Failed to load schedule');
+    
+    const data = await res.json();
+    
+    // Also save to localStorage for offline access
+    if (data && data.tasks) {
+      localStorage.setItem(`schedule_${date}`, JSON.stringify(data));
+    }
+    
+    return data;
+  } catch (error) {
+    // Fallback to localStorage
+    return loadScheduleFromStorage(date);
   }
 }
 
@@ -200,9 +270,8 @@ export async function getSettings(): Promise<UserSettings> {
   }
   
   try {
-    const res = await fetch(`${BASE_URL}/user/settings`, {
+    const res = await authenticatedFetch(`${BASE_URL}/user/settings`, {
       method: 'GET',
-      headers: getAuthHeader(),
     });
     
     if (!res.ok) throw new Error('Failed to get settings');
@@ -231,9 +300,8 @@ export async function getTelegramLinkCode(): Promise<TelegramLinkResponse> {
     };
   }
   
-  const res = await fetch(`${BASE_URL}/user/telegram/link`, {
+  const res = await authenticatedFetch(`${BASE_URL}/user/telegram/link`, {
     method: 'POST',
-    headers: getAuthHeader(),
   });
   
   if (!res.ok) throw new Error('Failed to get link code');
@@ -246,9 +314,8 @@ export async function unlinkTelegram(): Promise<ApiResponse> {
     return { success: true, message: 'Telegram unlinked (dev mode)' };
   }
   
-  const res = await fetch(`${BASE_URL}/user/telegram/unlink`, {
+  const res = await authenticatedFetch(`${BASE_URL}/user/telegram/unlink`, {
     method: 'POST',
-    headers: getAuthHeader(),
   });
   
   if (!res.ok) throw new Error('Failed to unlink Telegram');
